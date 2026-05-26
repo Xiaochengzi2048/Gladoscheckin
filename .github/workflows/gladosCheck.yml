@@ -21,9 +21,9 @@ jobs:
         python-version: [3.13]
 
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v4
     - name: set up python ${{ matrix.python-version }}
-      uses: actions/setup-python@v6
+      uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
 
@@ -46,8 +46,8 @@ jobs:
         GLADOS_VERBOSE: ${{ secrets.GLADOS_VERBOSE }}
 
     - name: keep alive
-      uses: liskin/gh-workflow-keepalive@v1 # using the workflow with default settings
-      
+      uses: liskin/gh-workflow-keepalive@v1
+
     - name: delete workflow runs
       uses: Mattraks/delete-workflow-runs@v2
       with:
@@ -56,4 +56,3 @@ jobs:
         retain_days: 7
         keep_minimum_runs: 7
         delete_run_by_conclusion_pattern: success
- 
