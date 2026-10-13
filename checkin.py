@@ -232,10 +232,15 @@ class API:
         return False
 
     def _get_headers(self) -> Dict[str, str]:
-        """获取请求头"""
+        """获取请求头
+        默认平台从环境变量 GLADOS_LOGIN_DEVICE 读取（取值 Windows/macOS/Linux/iPhone/Android），
+        默认 macOS，与账号登录设备保持一致，避免"设备不匹配、积分不发放"。
+        """
+        login_device = (os.environ.get("GLADOS_LOGIN_DEVICE") or "macOS").strip()
+        user_agent = PLATFORM_UA.get(login_device, PLATFORM_UA["macOS"])
         return {
             "origin": f"https://{self.domain}",
-            "user-agent": PLATFORM_UA["Windows"],
+            "user-agent": user_agent,
         }
 
     def _log(self, level: str, emoji: str, message: str, force: bool = False) -> None:
@@ -521,27 +526,54 @@ class Checker:
             days_str, status_code = api.get_status(cookie)
             result.days = days_str
 
-            # 2. 签到
+            # 2. 确认签到前积分
+            self._log(cookie_idx, domain, LogEmoji.POINTS, "查询签到前积分")
+            _, points_before = api.get_points(cookie)
+
+            # 3. 签到
             self._log(cookie_idx, domain, LogEmoji.CHECKIN, "执行签到")
             checkin_result = api.checkin(cookie)
             result.status = checkin_result["status"]
             result.code = checkin_result.get("code", CheckinStatus.FAILURE)
 
-            # 3. 获取积分
-            self._log(cookie_idx, domain, LogEmoji.POINTS, "查询总积分")
-            points_str, points_num = api.get_points(cookie)
+            # 4. 确认签到后积分，并计算本次新增
+            self._log(cookie_idx, domain, LogEmoji.POINTS, "查询签到后积分")
+            points_str, points_after = api.get_points(cookie)
             result.points_total = points_str
 
-            # 4. 执行兑换（未配置有效兑换计划时跳过）
+            gained = points_after - points_before
+            if result.code == CheckinStatus.SUCCESS and gained > 0:
+                result.points = str(gained)
+            else:
+                result.points = "0"
+            self._log(
+                cookie_idx,
+                domain,
+                LogEmoji.POINTS,
+                f"本次新增 {gained} 积分 (签到前 {points_before} → 签到后 {points_after})",
+                force=True,
+            )
+
+            # 5. 兑换：仅当积分已达到兑换门槛时才执行，否则跳过（避免无谓的失败请求）
             if self.config.exchange_plan in self.config.EXCHANGE_PLANS:
                 required_points = self.config.EXCHANGE_PLANS[self.config.exchange_plan]
-                self._log(
-                    cookie_idx,
-                    domain,
-                    LogEmoji.EXCHANGE,
-                    f"开始兑换 {self.config.exchange_plan} (需要 {required_points} 积分)",
-                )
-                result.exchange = api.exchange(cookie, self.config.exchange_plan, required_points)
+                if points_after >= required_points:
+                    self._log(
+                        cookie_idx,
+                        domain,
+                        LogEmoji.EXCHANGE,
+                        f"积分 {points_after} 已达门槛，开始兑换 {self.config.exchange_plan} (需要 {required_points} 积分)",
+                    )
+                    result.exchange = api.exchange(cookie, self.config.exchange_plan, required_points)
+                else:
+                    result.exchange = f"积分不足 ({points_after}/{required_points})，跳过兑换"
+                    self._log(
+                        cookie_idx,
+                        domain,
+                        LogEmoji.INFO,
+                        f"积分不足 ({points_after}/{required_points})，跳过兑换",
+                        force=True,
+                    )
             else:
                 result.exchange = "未配置兑换计划，跳过自动兑换"
                 self._log(cookie_idx, domain, LogEmoji.INFO, "未配置兑换计划，跳过自动兑换", force=True)
