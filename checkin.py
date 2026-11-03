@@ -18,7 +18,7 @@ from urllib3.util.retry import Retry
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s", datefmt="%H:%M:%S")
 log = logging.getLogger("glados")
 
-DOMAINS = ["glados.cloud", "railgun.info"]
+DOMAINS = ["glados.cloud"]
 EXCHANGE_PLANS = {"plan100": 100, "plan200": 200, "plan500": 500}
 UA = {
     "Windows": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
